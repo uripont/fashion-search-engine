@@ -1,0 +1,15 @@
+# Environment
+.venv/
+.env
+__pycache__/
+*.py[cod]
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data (downloaded by scripts/fetch_data.py)
+data/*
+!data/validation_labels.csv
+
+# OS
+.DS_Store
