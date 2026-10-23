@@ -66,6 +66,7 @@ src/fashion_search/   search engine package
 scripts/              setup and maintenance scripts
 notebooks/            analysis and experiments
 reports/              LaTeX reports, one folder per part
+presentations/        talks given on the topic, with their figures' source
 data/                 downloaded data (git-ignored, except the labels)
 ```
 

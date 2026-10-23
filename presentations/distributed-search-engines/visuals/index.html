@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deck figures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --line: #dadce0; --text: #202124; --muted: #5f6368; --blue: #1a73e8; --blue-soft: #e8f0fe; --stage: #f1f3f4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--stage); color: var(--text); font: 14px 'Google Sans', Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .page { font-size: 18px; font-weight: 500; }
+  .page input { width: 3.2em; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; text-align: center; }
+  .info { color: var(--muted); margin-right: auto; }
+  .info b { color: var(--text); font-weight: 500; }
+  button, a.btn { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 18px; padding: 6px 14px; cursor: pointer; color: var(--text); text-decoration: none; }
+  button:hover, a.btn:hover { background: #f8f9fa; }
+  .primary { background: var(--blue) !important; color: #fff !important; border-color: var(--blue) !important; }
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; min-height: 0; }
+  .slide { background: #fff; box-shadow: 0 1px 3px rgba(60,64,67,.3), 0 4px 8px rgba(60,64,67,.15); position: relative; aspect-ratio: 16 / 9; width: min(100%, calc((100vh - 110px) * 16 / 9)); container-type: inline-size; }
+  .slide .frame { position: absolute; inset: 0; pointer-events: none; }
+  .slide .pill { position: absolute; left: 4.1%; top: 4.3%; width: 64%; height: 8.3%; border: 1px solid #dfe1e5; border-radius: 999px; box-shadow: 0 1px 6px rgba(32,33,36,.18); display: flex; align-items: center; padding-left: 5%; font-size: 1.6cqw; color: #9aa0a6; white-space: nowrap; overflow: hidden; }
+  .slide .rule { position: absolute; left: 0; right: 0; top: 17.6%; border-top: 1px solid #ebebeb; }
+  .slide .num { position: absolute; right: 3%; bottom: 2.6%; font-size: .9cqw; color: #70757a; }
+  .slide .vis { position: absolute; }
+  .slide .vis svg { width: 100%; height: 100%; display: block; }
+  .slide.bare .frame { display: none; }
+  .textonly { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); font-size: 1.6cqw; gap: .6cqw; }
+  .textonly b { color: var(--text); font-size: 2.2cqw; font-weight: 500; }
+  .err { color: #d93025; white-space: pre-wrap; font: 12px monospace; padding: 20px; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11px; background: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <button id="prev" title="Previous (←)">‹</button>
+  <span class="page">Page <input id="pg" value="1"> <span id="of"></span></span>
+  <button id="next" title="Next (→)">›</button>
+  <span class="info" id="info"></span>
+  <button id="frame">Hide slide frame</button>
+  <button id="svg">Download SVG</button>
+  <a class="btn primary" id="png" target="_blank">Exported PNG</a>
+</header>
+<div class="stage"><div class="slide" id="slide">
+  <div class="frame"><div class="pill" id="pill"></div><div class="rule"></div><div class="num" id="num"></div></div>
+  <div class="vis" id="vis"></div>
+</div></div>
+<script>
+/* A slideshow of the deck's figures, page by page (same numbers as the deck).
+ * Edit scenes/<id>.js and reload. To produce the files for the deck run
+ *   node visuals/export.js
+ * which writes export/png/<id>-<n>.png and export/pages/p<NN>_<id>-<n>.png. */
+const LIB = ['lib/theme.js', 'lib/svg.js', 'lib/parts.js', 'lib/scene.js', 'lib/data.js', 'lib/indexgrid.js', 'scenes/manifest.js'];
+// Where each layout sits on the 13.333 x 7.5 in slide (same as in the deck).
+const PLACE = { full: { x: 0.5, y: 1.42, w: 12.333 }, right: { x: 4.83, y: 1.48, w: 8.0 } };
+const SW = 13.333, SH = 7.5;
+let pages = [], pos = 0, frameOn = true;
+
+const load = (src) => new Promise((ok) => { const s = document.createElement('script'); s.src = src; s.onload = () => ok(true); s.onerror = () => ok(false); document.head.appendChild(s); });
+
+async function init() {
+  for (const f of LIB) await load(f);
+  for (const m of VIS.manifest) if (typeof m === 'string') await load('scenes/' + m + '.js');
+  pages = VIS.pages();
+  document.getElementById('of').textContent = '/ ' + pages.length;
+  const h = parseInt(location.hash.slice(1), 10);
+  show(h > 0 ? h - 1 : 0);
+}
+
+function show(k) {
+  pos = Math.max(0, Math.min(pages.length - 1, k));
+  const p = pages[pos];
+  history.replaceState(null, '', '#' + p.page);
+  document.getElementById('pg').value = p.page;
+  document.getElementById('num').textContent = p.page;
+  const vis = document.getElementById('vis');
+  const info = document.getElementById('info');
+  const sc = p.id && VIS.sceneById[p.id];
+  document.getElementById('svg').disabled = !sc;
+  const pngBtn = document.getElementById('png');
+  if (p.text) {
+    info.innerHTML = 'text-only page';
+    vis.removeAttribute('style'); vis.innerHTML = '';
+    document.getElementById('pill').textContent = p.text;
+    vis.style.cssText = 'inset:0';
+    vis.innerHTML = `<div class="textonly"><b>${p.text}</b>No figure on this page: edit it directly in the deck.</div>`;
+    pngBtn.style.visibility = 'hidden';
+    return;
+  }
+  pngBtn.style.visibility = sc ? 'visible' : 'hidden';
+  pngBtn.href = `export/pages/p${String(p.page).padStart(2, '0')}_${p.key}.png`;
+  if (!sc) {
+    info.innerHTML = `<b>${p.key}</b> · scenes/${p.id}.js not written yet`;
+    vis.style.cssText = 'inset:0'; vis.innerHTML = `<div class="textonly"><b>${p.key}</b>Figure not written yet.</div>`;
+    return;
+  }
+  info.innerHTML = `<b>${p.key}</b> · ${sc.title} · step ${p.step + 1}/${sc.steps.length} “${sc.steps[p.step]}” · scenes/${p.id}.js`;
+  document.getElementById('pill').textContent = sc.title;
+  try { vis.innerHTML = sc.svg(p.step); } catch (e) { vis.innerHTML = `<div class="err">${e.stack}</div>`; }
+  const pl = PLACE[sc.layout], hIn = pl.w * sc.h / sc.w;
+  vis.style.cssText = `left:${pl.x / SW * 100}%;top:${pl.y / SH * 100}%;width:${pl.w / SW * 100}%;height:${hIn / SH * 100}%`;
+}
+
+document.getElementById('prev').onclick = () => show(pos - 1);
+document.getElementById('next').onclick = () => show(pos + 1);
+document.getElementById('pg').onchange = (e) => show(parseInt(e.target.value, 10) - 1);
+document.getElementById('frame').onclick = (e) => { frameOn = !frameOn; document.getElementById('slide').classList.toggle('bare', !frameOn); e.target.textContent = frameOn ? 'Hide slide frame' : 'Show slide frame'; };
+document.getElementById('svg').onclick = () => {
+  const p = pages[pos], sc = VIS.sceneById[p.id];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([sc.svg(p.step)], { type: 'image/svg+xml' })); a.download = p.key + '.svg'; a.click();
+};
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { show(pos + 1); e.preventDefault(); }
+  if (['ArrowLeft', 'PageUp'].includes(e.key)) { show(pos - 1); e.preventDefault(); }
+  if (e.key === 'Home') show(0);
+  if (e.key === 'End') show(pages.length - 1);
+});
+init();
+</script>
+</body>
+</html>
