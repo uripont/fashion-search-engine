@@ -53,8 +53,9 @@ tectonic reports/part-1/main.tex       # writes reports/part-1/main.pdf
 ```
 
 Notebooks save their figures into `reports/part-N/figures/`, so the report
-always shows what the code produced. `main.pdf` is committed only for the
-final version of each report.
+always shows what the code produced. Built PDFs are git-ignored; the final
+version of each report is added on purpose with
+`git add -f reports/part-N/main.pdf`.
 
 ## Data
 
