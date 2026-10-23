@@ -9,12 +9,13 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
 \usepackage[nameinlink]{cleveref}
 
 \graphicspath{{figures/}}
 
 \title{Fashion Search Engine\\[0.3em]\large Part 1: Text Processing and Exploratory Data Analysis}
-\author{Marc \and Èric \and Oriol Pont}
+\author{Marc Mallol\and Èric Dürr\and Oriol Pont}
 \date{Information Retrieval and Web Analytics, 2026}
 
 \begin{document}
@@ -25,22 +26,167 @@
 
 \section{Data preparation}
 
+The code is in the \path{fashion_search} package: \path{text.py} turns text into
+search terms and \path{corpus.py} builds the product records. Section~2 of
+\path{notebooks/part_1.ipynb} runs them and holds the evidence for each decision.
+Together they turn each of the 28{,}080 products into one record that keeps every
+field a result must show, with numbers parsed, plus one list of terms per searchable
+field. The records are saved to \path{data/processed/products.parquet}, which the
+next parts of the project read.
+
 \subsection{Text pre-processing}
-% Pipeline for title and description: tokenization, lowercasing,
-% punctuation and stop-word removal, stemming, and any extra steps.
+
+The same function, \texttt{build\_terms}, processes every text field and every
+query, so query terms and document terms always match. It applies, in order:
+
+\begin{enumerate}
+  \item \textbf{Repair and normalize.} 91 descriptions contain UTF-8 text that was
+    decoded as Latin-1 (\texttt{â\textbackslash x80\textbackslash x99} instead of an
+    apostrophe), and 6{,}817 titles contain non-breaking spaces. We undo the former,
+    fold accents and special spaces to plain ASCII and lowercase everything.
+  \item \textbf{Unify spelling variants.} The catalogue writes the same garment as
+    \emph{t-shirt}, \emph{t shirt}, \emph{tshirt} and \emph{tee}; all become
+    \emph{tshirt}. \emph{v-neck} and \emph{v neck} become \emph{vneck}, and glued
+    words such as \emph{slimfit} are split (\emph{slim fit}).
+  \item \textbf{Possessives and hyphens.} \emph{women's} becomes \emph{women}, so it
+    matches the query word; hyphenated words are joined (\emph{round-neck} becomes
+    \emph{roundneck}).
+  \item \textbf{Remove punctuation.} Every other symbol becomes a space. Removing it
+    instead would glue words that the source writes without a space after a full
+    stop (\emph{cotton.Designed}).
+  \item \textbf{Tokenize} with NLTK's \texttt{word\_tokenize}~\cite{bird2009nltk}.
+  \item \textbf{Remove stop words, numbers and single letters,} using NLTK's English
+    stop word list. Gender words (\emph{men}, \emph{women}) are not in it and are kept,
+    since both validation queries depend on them.
+  \item \textbf{Stem} with the Porter stemmer (\emph{sleeves} and \emph{sleeve} become
+    \emph{sleev}). Lemmatization would give readable terms, but it needs
+    part-of-speech tags to be accurate and merges fewer variants.
+\end{enumerate}
 
 \subsection{Fields returned for each result}
-% pid, title, description, brand, category, sub_category, product_details,
-% seller, out_of_stock, selling_price, discount, actual_price,
-% average_rating, url.
+
+All fourteen fields a result must show are kept in their original form: \texttt{pid}
+(the key used for evaluation), \texttt{title}, \texttt{description}, \texttt{brand},
+\texttt{category}, \texttt{sub\_category}, \texttt{product\_details}, \texttt{seller},
+\texttt{out\_of\_stock}, \texttt{selling\_price}, \texttt{discount},
+\texttt{actual\_price}, \texttt{average\_rating} and \texttt{url}. The term lists are
+added next to them, never in their place, so a result page can show the original
+text. Empty strings are stored as missing values, so a result can leave out what a
+product does not have. Many fields are often missing
+(\cref{tab:presence}); most importantly, 40\% of products have no description.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lr@{\hskip 2em}lr}
+    \toprule
+    Field & Present & Field & Present \\
+    \midrule
+    description & 60.3\% & average\_rating & 91.9\% \\
+    brand & 92.8\% & discount & 97.0\% \\
+    seller & 94.1\% & actual\_price & 97.2\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{Fields that are not always present. The other seven are present in every product.}
+  \label{tab:presence}
+\end{table}
 
 \subsection{Categorical fields}
-% category, sub_category, brand, product_details, seller:
-% merged text field vs separate indexed fields, pros and cons.
+
+There are three ways to handle \texttt{category}, \texttt{sub\_category},
+\texttt{brand}, \texttt{product\_details} and \texttt{seller}:
+
+\begin{itemize}
+  \item \textbf{Merge them into one text field.} It is simple, and a query matches
+    whatever field a word is in. But a match in a generic field counts as much as a
+    match in the title, and the field's statistics are mixed together. For example,
+    \emph{clothing} would appear in 97\% of products and say nothing.
+  \item \textbf{Index them as separate fields.} The ranking can weight each field
+    differently (a title match is stronger evidence than a description match) and
+    each keeps its own term statistics. It costs one index per field and more
+    complex queries.
+  \item \textbf{Use them as filters.} Exact values, chosen by the user or detected in
+    the query, restrict the results without affecting the text score. This only works
+    for fields with few, well-defined values.
+\end{itemize}
+
+We chose by looking at where the words of the two validation queries appear in the
+products judged relevant (\cref{fig:query-terms}). \emph{Cotton} never appears in a
+title: it is only in the description or in the Fabric detail. \emph{Full} and
+\emph{sleeve} are in the Sleeve detail of every relevant product. \emph{Blue} and
+\emph{men} are in Color and Ideal For. No query word ever appears in brand,
+category or sub-category. Because queries are conjunctive, a product is found only if
+\emph{every} query word is indexed: with titles and descriptions alone, 11 of the
+13 relevant products for query~1 are found, and adding the product details finds all
+13.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{query_terms_by_field.pdf}
+  \caption{Share of relevant products for each validation query that contain each
+    (stemmed) query term, by field. Brand and category contain none of them.}
+  \label{fig:query-terms}
+\end{figure}
+
+Our decision, field by field:
+
+\begin{itemize}
+  \item \textbf{Title, description, product details and brand are indexed as separate
+    text fields.} A plain inverted index can still use all of them together (a
+    document's terms are the union of the four), while later ranking can weight them
+    separately. From \texttt{product\_details} we index the \emph{values} (\emph{Cotton
+    Blend}, \emph{Full Sleeve}, \emph{Slim}) but not the keys, which repeat in almost
+    every product. We drop \emph{Style Code}, an internal product code. Brand is
+    distinctive (324 brands; the most common has only 3.6\% of products), so a query
+    naming a brand should find it.
+  \item \textbf{Category and sub-category are filters.} There are only 4 categories,
+    and 96.6\% of products are \emph{Clothing and Accessories}; there are 24
+    sub-categories, and \emph{Topwear} alone has 54.5\%. As text they would add an
+    almost constant word to every product; as filters (\emph{Footwear} only) they are
+    precise.
+  \item \textbf{Seller is a filter and is displayed, not searched.} Its 534 values are
+    company names that do not describe the product, so they would match unrelated
+    queries.
+\end{itemize}
+
+The second validation query shows the limits of conjunctive queries: whatever fields
+are indexed, only 6 of its 10 relevant products contain \emph{slim}, since the
+others are \emph{tapered} or \emph{super skinny} jeans that the judges still found
+relevant. Some identical products are also judged differently, so the labels contain
+some noise. We return to this in Part 2.
 
 \subsection{Numerical fields}
-% out_of_stock, selling_price, discount, actual_price, average_rating:
-% parsing, cleaning, and whether to index them as text.
+
+\texttt{selling\_price}, \texttt{actual\_price}, \texttt{discount} and
+\texttt{average\_rating} arrive as text (\texttt{"2,999"}, \texttt{"69\% off"},
+\texttt{"3.9"}). We parse them into numbers and keep missing values as missing, not
+as zero, which would make a product look free or badly rated
+(\cref{tab:numeric}). \texttt{out\_of\_stock} is already a boolean. Two checks confirm the parsing: no selling price is above its actual
+price, and every parsed discount is within one percentage point of the one implied by
+the two prices.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lrrrr}
+    \toprule
+    Field & Min & Median & Max & Missing \\
+    \midrule
+    selling\_price (INR) & 99 & 545 & 7{,}999 & 2 \\
+    actual\_price (INR) & 150 & 1{,}199 & 12{,}999 & 777 \\
+    discount (\%) & 1 & 53 & 87 & 855 \\
+    average\_rating & 1.0 & 3.8 & 5.0 & 2{,}261 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Numerical fields after parsing.}
+  \label{tab:numeric}
+\end{table}
+
+These fields are \textbf{not indexed as text terms}. A term only helps if users type
+it, and nobody searches for \emph{921}. Each price would also become its own rare
+term, so TF-IDF would give it a high weight, and as text it could not express
+\emph{under 1{,}000}. Kept as numbers, they serve three purposes: filters (price range,
+minimum rating, in stock only), signals for our own ranking score in Part 3 (a
+well-rated, discounted, available product is a better result), and information on the
+results page.
 
 \section{Exploratory data analysis}
 \subsection{Text}
