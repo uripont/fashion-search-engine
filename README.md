@@ -26,8 +26,13 @@ git clone https://github.com/uripont/fashion-search-engine
 cd fashion-search-engine
 uv sync                              # installs Python 3.12 and all dependencies into .venv
 uv run python scripts/fetch_data.py  # downloads the catalogue and NLTK resources
-uv run jupyter lab                   # opens the notebooks
+JUPYTER_PREFER_ENV_PATH=1 uv run jupyter lab   # opens the notebooks
 ```
+
+`JUPYTER_PREFER_ENV_PATH=1` makes Jupyter use the project's Python kernel even
+if you have a global `python3` kernel pointing at another Python (on Windows
+PowerShell, run `$env:JUPYTER_PREFER_ENV_PATH=1` first). In VS Code, pick the
+`.venv` interpreter as the notebook kernel instead.
 
 `uv sync` uses the exact versions in `uv.lock`, so everyone gets the same
 environment. Add dependencies with `uv add <package>` (or
