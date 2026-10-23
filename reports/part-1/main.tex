@@ -1,0 +1,57 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+\graphicspath{{figures/}}
+
+\title{Fashion Search Engine\\[0.3em]\large Part 1: Text Processing and Exploratory Data Analysis}
+\author{Marc \and Èric \and Oriol Pont}
+\date{Information Retrieval and Web Analytics, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+% The corpus, what this part covers, where the code lives.
+
+\section{Data preparation}
+
+\subsection{Text pre-processing}
+% Pipeline for title and description: tokenization, lowercasing,
+% punctuation and stop-word removal, stemming, and any extra steps.
+% Text processing uses NLTK~\cite{bird2009nltk}.
+
+\subsection{Fields returned for each result}
+% pid, title, description, brand, category, sub_category, product_details,
+% seller, out_of_stock, selling_price, discount, actual_price,
+% average_rating, url.
+
+\subsection{Categorical fields}
+% category, sub_category, brand, product_details, seller:
+% merged text field vs separate indexed fields, pros and cons.
+
+\subsection{Numerical fields}
+% out_of_stock, selling_price, discount, actual_price, average_rating:
+% parsing, cleaning, and why they are not indexed as text.
+
+\section{Exploratory data analysis}
+% Word counts, sentence length, vocabulary size, ratings, prices,
+% discounts, top sellers and brands, stock, word clouds,
+% entity recognition~\cite{honnibal2020spacy}.
+
+\section{Conclusions}
+
+\nocite{*} % Remove once the text cites its sources.
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

@@ -36,6 +36,21 @@ the updated `pyproject.toml` and `uv.lock`.
 
 For the LLM features, copy `.env.example` to `.env` and fill in the key.
 
+## Reports
+
+Each part of the project has a LaTeX report in `reports/part-N/`, built
+with [Tectonic](https://tectonic-typesetting.github.io/en-US/install.html)
+(one binary that downloads the LaTeX packages it needs on the first build):
+
+```bash
+brew install tectonic                  # macOS; see the link above for Windows and Linux
+tectonic reports/part-1/main.tex       # writes reports/part-1/main.pdf
+```
+
+Notebooks save their figures into `reports/part-N/figures/`, so the report
+always shows what the code produced. `main.pdf` is committed only for the
+final version of each report.
+
 ## Data
 
 `fashion_products_dataset.json` holds 28,080 products (title, description,
@@ -50,6 +65,7 @@ reference queries.
 src/fashion_search/   search engine package
 scripts/              setup and maintenance scripts
 notebooks/            analysis and experiments
+reports/              LaTeX reports, one folder per part
 data/                 downloaded data (git-ignored, except the labels)
 ```
 
