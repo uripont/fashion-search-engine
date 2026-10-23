@@ -22,7 +22,27 @@
 \maketitle
 
 \section{Introduction}
-% The corpus, what this part covers, where the code lives.
+
+This report covers Part 1 of our fashion search engine: text processing and
+exploratory data analysis of a catalogue of 28{,}080 products from Flipkart, an
+Indian e-commerce site. Each product has a title, an optional description, a
+brand, a category and sub-category, a list of product details (fabric, sleeve,
+colour, \ldots), a seller, prices, a discount, an average rating, a stock flag
+and a URL. The goal of this part is to turn the raw catalogue into clean records
+that the later parts index (Part~2), rank (Part~3) and serve through a RAG web
+application (Part~4).
+
+Section~2 describes the data preparation: the text pre-processing pipeline, the
+fields kept for each result, and how categorical and numerical fields are
+handled. We check each decision against the two validation queries in
+\path{validation_labels.csv}, \emph{women full sleeve sweatshirt cotton} and
+\emph{men slim jeans blue}. Section~3 explores the text and the products of the
+catalogue, and Section~4 summarises what this means for the search engine.
+
+The code is at \url{https://github.com/uripont/fashion-search-engine}, tag
+\texttt{IRWA-2026-part-1}. The \path{fashion_search} package holds the reusable
+code, and \path{notebooks/part_1.ipynb} runs it and produces every number and
+figure in this report. The README explains how to reproduce them.
 
 \section{Data preparation}
 
@@ -75,7 +95,7 @@ text. Empty strings are stored as missing values, so a result can leave out what
 product does not have. Many fields are often missing
 (\cref{tab:presence}); most importantly, 40\% of products have no description.
 
-\begin{table}[h]
+\begin{table}[htbp]
   \centering
   \begin{tabular}{lr@{\hskip 2em}lr}
     \toprule
@@ -86,7 +106,8 @@ product does not have. Many fields are often missing
     seller & 94.1\% & actual\_price & 97.2\% \\
     \bottomrule
   \end{tabular}
-  \caption{Fields that are not always present. The other seven are present in every product.}
+  \caption{Fields that are often missing. \texttt{selling\_price} is missing in only
+    2 products; the other seven fields are present in every product.}
   \label{tab:presence}
 \end{table}
 
@@ -119,7 +140,7 @@ category or sub-category. Because queries are conjunctive, a product is found on
 13 relevant products for query~1 are found, and adding the product details finds all
 13.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=0.9\linewidth]{query_terms_by_field.pdf}
   \caption{Share of relevant products for each validation query that contain each
@@ -137,7 +158,8 @@ Our decision, field by field:
     Blend}, \emph{Full Sleeve}, \emph{Slim}) but not the keys, which repeat in almost
     every product. We drop \emph{Style Code}, an internal product code. Brand is
     distinctive (324 brands; the most common has only 3.6\% of products), so a query
-    naming a brand should find it.
+    naming a brand should find it, although many brand names are truncated in the
+    source data (\cref{sec:catalogue}).
   \item \textbf{Category and sub-category are filters.} There are only 4 categories,
     and 96.6\% of products are \emph{Clothing and Accessories}; there are 24
     sub-categories, and \emph{Topwear} alone has 54.5\%. As text they would add an
@@ -164,7 +186,7 @@ as zero, which would make a product look free or badly rated
 price, and every parsed discount is within one percentage point of the one implied by
 the two prices.
 
-\begin{table}[h]
+\begin{table}[htbp]
   \centering
   \begin{tabular}{lrrrr}
     \toprule
@@ -189,17 +211,204 @@ well-rated, discounted, available product is a better result), and information o
 results page.
 
 \section{Exploratory data analysis}
+
+Section~3 of the notebook produces every figure below.
+
 \subsection{Text}
-% Word counts, sentence length, vocabulary size, word clouds,
-% entity recognition.
+
+\paragraph{Length.} Titles are short and uniform: 6.5 words on average (median 6,
+maximum 38). Descriptions are longer and far more variable: 29.8 words on
+average, but 40\% of products have none, so the median is only 10, and the
+longest has 623 words (\cref{fig:wordcount}). Titles are noun phrases, not
+sentences. Splitting descriptions into sentences with NLTK gives 3.1 sentences of
+15.7 words on average (medians 2 and 14): short marketing blurbs rather than long
+text. This is approximate, because some descriptions omit the space after a full
+stop, and those sentence pairs count as one. Since every product has a title and only 60\% have a
+description, the title is the one field we can rely on for every product.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{word_count_distribution.pdf}
+  \caption{Words per title and per description (raw text).}
+  \label{fig:wordcount}
+\end{figure}
+
+\paragraph{Vocabulary.} Counting lowercase whitespace-separated words, titles use
+953 distinct words and descriptions 10{,}250. Pre-processing reduces them to 652
+(\(-32\%\)) and 4{,}933 (\(-52\%\)) terms (\cref{fig:vocab}); product details add
+3{,}604 terms and brands 388. Titles share a tiny vocabulary because they follow a
+template (pattern, gender, neck, colour, garment, as in \emph{Printed Women Round
+Neck Black T-Shirt}), so many products have nearly identical titles.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.65\linewidth]{vocabulary_size.pdf}
+  \caption{Vocabulary size per field, before and after pre-processing.}
+  \label{fig:vocab}
+\end{figure}
+
+\paragraph{Frequent terms.} The catalogue is dominated by t-shirts:
+\emph{tshirt} is the most frequent term in titles and descriptions (28{,}256
+occurrences), followed by \emph{women} (17{,}569), \emph{men} (16{,}831),
+\emph{neck}, \emph{print} and \emph{cotton} (\cref{fig:top50,fig:clouds}). Several
+words of the validation queries (\emph{women}, \emph{men}, \emph{cotton},
+\emph{sleev}, \emph{blue}) are among the most frequent terms. They appear in so
+many products that they barely tell them apart, so TF-IDF will give them low
+weight and the rarer garment words (\emph{sweatshirt}, \emph{jean}) will drive
+the ranking.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{word_clouds.pdf}
+  \caption{Most frequent terms per field, after pre-processing.}
+  \label{fig:clouds}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.55\linewidth]{top50_terms.pdf}
+  \caption{The 50 most frequent terms in titles and descriptions (stemmed).}
+  \label{fig:top50}
+\end{figure}
+
+\paragraph{Named entities.} We ran spaCy's \texttt{en\_core\_web\_sm}
+model~\cite{honnibal2020spacy} on a random sample of 2{,}000 titles. It finds an
+entity in 1{,}402 of them, 1{,}772 in total (ORG 930, PERSON 421, CARDINAL 378),
+but nearly all are wrong
+(\cref{fig:ner}): \emph{Solid Women} is tagged as a person, whole titles such as
+\emph{Printed Women Round Neck Black T-Shirt} as organisations, \emph{Kurta} as a
+place, and the CARDINAL entities are pack sizes. The model, trained on news text,
+reads capitalised product titles as names. The real entities, brands, already
+have their own field, so we do not use entity recognition for indexing.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\linewidth]{named_entities.pdf}
+  \caption{The 25 most frequent named entities in a sample of 2{,}000 titles.}
+  \label{fig:ner}
+\end{figure}
 
 \subsection{Catalogue}
-% Ratings, prices, discounts, top sellers and brands, stock,
-% categories, missing values.
+\label{sec:catalogue}
+
+\paragraph{Categories.} 96.6\% of products are \emph{Clothing and Accessories};
+the rest are mostly \emph{Footwear}, with only a handful of \emph{Bags, Wallets
+\& Belts} and \emph{Toys} (\cref{fig:categories}). \emph{Topwear} alone holds
+54.5\% of products, followed by \emph{Bottomwear} and \emph{Winter Wear}. Some
+sub-category values are noisy, with a brand glued to a category name
+(\emph{Uber Urban Clothing and Accessories}) or the same value in two spellings
+(\emph{SUNSHOPPING} and \emph{Sunshopping Bags, Wallets \& Belts}); they are rare,
+but a category filter has to account for them.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{category_breakdown.pdf}
+  \caption{Products per category and per sub-category (top 20).}
+  \label{fig:categories}
+\end{figure}
+
+\paragraph{Brands and sellers.} Both have a long tail: 324 brands and 534
+sellers, and the largest of each (seller \emph{RetailNet}, about 1{,}400
+products, 5.3\%; brand \emph{ECKO Unl}, 3.6\%) holds only a small share, and the
+top 20 of each cover about 40\% of products (\cref{fig:brands}). Brand names are truncated in the source data (\emph{Pu},
+\emph{True Bl}, \emph{V}), while seller names are complete
+(\emph{ArvindTrueBlue}). A query for the full brand name will therefore not match
+the brand field, so brand matches will be less useful than its distinctiveness
+suggests.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{top_sellers_brands.pdf}
+  \caption{The 20 sellers and brands with the most products.}
+  \label{fig:brands}
+\end{figure}
+
+\paragraph{Prices and discounts.} Prices are right-skewed (\cref{fig:prices}).
+The median selling price is INR~545 (half of products between 390 and 820), while
+the median actual price is INR~1{,}199. Almost every product is discounted, and
+heavily: the median discount is 53\%, half of products are between 40\% and 63\%
+off, and the maximum is 87\%. The actual price therefore acts as a reference
+price; the selling price is what the user pays and the one to filter on.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{price_distributions.pdf}
+  \caption{Selling price, actual price and discount, capped at the 99th percentile.}
+  \label{fig:prices}
+\end{figure}
+
+\paragraph{Ratings and stock.} The median rating is 3.8 (mean 3.63, half of
+products between 3.2 and 4.1); 16.8\% of rated products are below 3, only 1.3\%
+have exactly 5.0, and 8.1\% of products have no rating
+(\cref{fig:rating-stock}). Only 5.9\% of products are out of stock, but these
+should not be ranked above available ones, so stock will act as a filter or a
+penalty.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.55\linewidth}
+    \includegraphics[width=\linewidth]{rating_distribution.pdf}
+  \end{minipage}\hfill
+  \begin{minipage}{0.42\linewidth}
+    \includegraphics[width=\linewidth]{out_of_stock.pdf}
+  \end{minipage}
+  \caption{Average rating (left) and stock (right).}
+  \label{fig:rating-stock}
+\end{figure}
+
+\paragraph{Rankings by a single field.} Sorting by one field shows why none of
+them works alone as a ranking. The top products by rating are all ties at 5.0,
+and since the dataset has no review counts we cannot tell whether a 5.0 comes
+from one review or from thousands. The most discounted products are cheap
+t-shirts at 84--87\% off (INR~128 instead of 998), and the most expensive are
+suits and jackets at INR~12{,}999. Rating, discount and price are useful signals
+on top of text relevance, which is how Part~3 will use them, but not as rankings
+by themselves.
 
 \section{Conclusions}
 
-\nocite{*} % Remove once the text cites its sources.
+The prepared corpus keeps every field a result must show, with numbers parsed and
+missing values kept as missing, plus one list of terms for each of the four
+searchable fields. Our main decisions are:
+
+\begin{itemize}
+  \item \textbf{One pipeline for documents and queries.} Repairing and normalising
+    the text, unifying spelling variants, removing stop words and stemming shrink
+    the title vocabulary by 32\% and the description vocabulary by 52\%, and make
+    query words such as \emph{women's}, \emph{t-shirt} or \emph{sleeves} match the
+    way products write them.
+  \item \textbf{Title, description, product details and brand are searched;
+    category, sub-category and seller are filters.} Product details are needed:
+    without them, 2 of the 13 relevant products of the first validation query miss
+    a query word. Category barely varies (96.6\% of products share one value) and
+    never contains a query word, so it only works as a filter.
+  \item \textbf{Numbers are not terms.} Prices, discount, rating and stock serve as
+    filters, as signals for our ranking score in Part~3, and as information on the
+    results page.
+\end{itemize}
+
+The analysis also shows what to expect when indexing and ranking. Titles are short
+and follow a template, and 40\% of products have no description, so many products
+have nearly identical text, and document length varies mostly with the
+description. The most frequent terms (\emph{tshirt}, \emph{women}, \emph{men},
+\emph{cotton}) include most words of the validation queries, so TF-IDF will rank
+mainly by the rarer garment words. No numeric field ranks well on its own: the
+best-rated products tie at 5.0 with no review counts to separate them, and almost
+every product is discounted. Finally, the data has problems that the next parts
+must handle: truncated brand names, noisy sub-category values, and validation
+labels that do not always contain the literal query words (only 6 of the 10
+relevant products for \emph{men slim jeans blue} contain \emph{slim}). An
+off-the-shelf entity recogniser mislabels most product titles, so we rely on the
+structured fields instead.
+
+\section*{Use of AI tools}
+
+% Check this with the group and add any other AI use before submitting.
+We used Claude (Anthropic), through Claude Code, to review the notebook and this
+report. It helped write the code production and debugging, and helped draft this report from the
+notebook outputs. We checked every number against the notebook outputs and
+reviewed and edited the text ourselves.
+
 \bibliographystyle{plain}
 \bibliography{refs}
 
